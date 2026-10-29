@@ -1,0 +1,15 @@
+# Runtime state that NI's Debian maintainer scripts create by hand.
+d /var/lib/nipal 0755 root root -
+d /var/lib/niorb 0755 root root -
+d /var/lib/nikal 0755 root root -
+d /var/local/natinst 0755 root root -
+d /var/local/natinst/ceip 0755 root root -
+d /var/local/natinst/mxs 0755 root root -
+d /var/local/natinst/systemsettings 0755 root root -
+d /var/local/natinst/udc 0777 root root -
+d /var/local/natinst/nisysapi 0777 root root -
+d /var/local/natinst/nisyslog 0777 root root -
+f /var/local/natinst/udc/settings.json 0666 root root - {}
+d /etc/natinst/nissl 0755 root root -
+d /etc/pxisa 0755 pxisa pxisa -
+Z /var/lib/nipxi - pxisa pxisa -

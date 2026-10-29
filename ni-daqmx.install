@@ -1,0 +1,45 @@
+# pacman install script: replaces the parts of NI's Debian maintainer scripts that
+# matter on Arch. The originals are kept in /usr/share/ni-daqmx-omarchy/debian/.
+
+_share=/usr/share/ni-daqmx-omarchy
+_units=(nipal nidevldu nimxssvr nisvcloc nisds niroco nipxicmsd ni-pxipf-nipxirm-bind nidrum)
+
+# Rebuild NI's object-broker class map from the .ocm files NI's postinst scripts register.
+_register_orb() {
+  rm -f /var/lib/niorb/niorbmap64
+  local ocm
+  while read -r ocm; do
+    [[ -e $ocm ]] && /usr/local/natinst/.nicore/bin/orbClassMap /x64 /file "$ocm" >/dev/null
+  done < "$_share/orb-classmaps.list"
+}
+
+_link_ca_bundle() {
+  ln -sf /etc/ssl/certs/ca-certificates.crt /etc/natinst/nissl/ca-bundle.crt
+}
+
+post_install() {
+  _link_ca_bundle
+  _register_orb
+  systemctl daemon-reload
+  systemctl enable "${_units[@]/%/.service}" >/dev/null 2>&1
+  echo ":: NI-DAQmx installed. Kernel modules are built by DKMS for every installed kernel."
+  echo ":: Reboot, or run 'ni-daqmx-omarchy start', then 'ni-daqmx-omarchy doctor'."
+}
+
+post_upgrade() {
+  _link_ca_bundle
+  _register_orb
+  systemctl daemon-reload
+  systemctl try-restart nipal.service >/dev/null 2>&1 || true
+}
+
+pre_remove() {
+  systemctl disable --now "${_units[@]/%/.service}" >/dev/null 2>&1 || true
+  modprobe -r nipalk nikal >/dev/null 2>&1 || true
+}
+
+post_remove() {
+  rm -rf /var/lib/niorb /var/lib/nikal /var/lib/nipal
+  rm -f /etc/natinst/nissl/ca-bundle.crt /usr/bin/nidevnode
+  systemctl daemon-reload
+}

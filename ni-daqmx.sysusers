@@ -1,0 +1,3 @@
+# Service account used by NI's PXI resource manager (ni-pxisa-compliance.postinst).
+g pxisa - -
+u pxisa -:pxisa "NI PXI services" - /usr/bin/nologin

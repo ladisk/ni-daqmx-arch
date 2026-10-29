@@ -1,0 +1,179 @@
+#!/bin/bash
+# ni-daqmx-omarchy: check, test, rebuild and update NI-DAQmx on Omarchy.
+
+set -uo pipefail
+
+REPO=${NI_DAQMX_OMARCHY_REPO:-$HOME/.local/share/ni-daqmx-omarchy}
+VM_RULE=/etc/udev/rules.d/90-ni-daq-vm.rules
+REPORT=${NI_DAQMX_REPORT:-$HOME/ni-daqmx-report.txt}
+CORE_MODULES=(nikal nipalk)
+
+ok()   { printf '  \e[32m✓\e[0m %s\n' "$*"; }
+bad()  { printf '  \e[31m✗\e[0m %s\n' "$*"; FAILED=1; }
+warn() { printf '  \e[33m!\e[0m %s\n' "$*"; }
+hint() { printf '      → %s\n' "$*"; }
+
+usage() {
+  cat <<EOF
+Usage: ni-daqmx-omarchy <command>
+
+  doctor        Check every layer (kernel modules, services, devices) and write
+                a full report to $REPORT
+  test          List NI devices through the Python nidaqmx API
+  start         Load the kernel modules and start NI's services now
+  rebuild       Rebuild the NI kernel modules for the running kernel, verbosely
+  update        Pull the latest installer and rebuild/reinstall the package
+  mode native   Use NI hardware on this machine (stop forwarding it to the ni-daq VM)
+  mode vm       Forward NI hardware to the ni-daq VM again
+  uninstall     Remove the package and everything it set up
+EOF
+}
+
+kernel_has_modules() {
+  local k=$1 m
+  for m in "${CORE_MODULES[@]}"; do
+    modinfo -k "$k" "$m" >/dev/null 2>&1 || return 1
+  done
+}
+
+cmd_doctor() {
+  FAILED=0
+  local k=$(uname -r)
+  echo "Kernel"
+  ok "running $k ($(pacman -Qqo /usr/lib/modules/$k 2>/dev/null | head -1))"
+  if [[ -d /usr/lib/modules/$k/build ]]; then ok "headers installed"
+  else bad "no headers for $k"; hint "install the matching *-headers package, or reboot into the newest kernel"; fi
+
+  echo "Kernel modules (DKMS)"
+  if kernel_has_modules "$k"; then ok "nikal and nipalk built for $k"
+  else bad "NI modules are not built for $k"; hint "ni-daqmx-omarchy rebuild   (shows the compiler error)"; fi
+  local failed_builds=$(dkms status -k "$k" 2>/dev/null | grep -E '^ni' | grep -vc installed)
+  [[ $failed_builds == 0 ]] && ok "all $(dkms status -k "$k" | grep -c '^ni') NI DKMS modules installed" \
+    || bad "$failed_builds NI DKMS modules not installed"
+  if lsmod | grep -q '^nipalk'; then ok "nipalk loaded"
+  else bad "nipalk not loaded"; hint "ni-daqmx-omarchy start, then check: journalctl -b -u nipal"; fi
+  [[ -c /dev/nipalk ]] && ok "/dev/nipalk present" || bad "/dev/nipalk missing"
+
+  echo "Services"
+  local u
+  for u in nipal nimxssvr nidevldu; do
+    systemctl is-active -q $u && ok "$u running" || { bad "$u not running"; hint "journalctl -b -u $u"; }
+  done
+
+  echo "Hardware"
+  if [[ -f $VM_RULE ]]; then
+    warn "NI USB devices are being forwarded to the ni-daq VM"
+    hint "ni-daqmx-omarchy mode native"
+  fi
+  local usb=$(lsusb -d 3923: 2>/dev/null)
+  [[ -n $usb ]] && ok "NI USB device: ${usb#*ID }" || warn "no NI USB device plugged in"
+
+  echo
+  write_report
+  if (( FAILED )); then
+    echo "Something is broken. Full details: $REPORT"
+    echo "Hand that file to Claude (or open an issue) to get it fixed."
+  else
+    echo "All checks passed. Next: ni-daqmx-omarchy test"
+  fi
+  return $FAILED
+}
+
+write_report() {
+  local k=$(uname -r)
+  {
+    echo "# ni-daqmx-omarchy report, $(date -Is)"
+    echo "## system";   uname -a; grep -E '^(NAME|BUILD_ID)=' /etc/os-release; omarchy-version 2>/dev/null
+    echo "## packages"; pacman -Q ni-daqmx dkms $(pacman -Qqo /usr/lib/modules/*/vmlinuz 2>/dev/null) 2>&1
+    echo "## installer"; git -C "$REPO" log -1 --format='%h %s (%cs)' 2>&1
+    echo "## dkms status"; dkms status 2>&1 | grep -E '^ni'
+    echo "## dkms build logs (failed only)"
+    local log
+    for log in /var/lib/dkms/ni*/*/build/make.log /var/lib/dkms/ni*/*/$k/*/log/make.log; do
+      [[ -f $log ]] && grep -qiE 'error|undefined' "$log" && { echo "### $log"; tail -60 "$log"; }
+    done
+    echo "## lsmod";   lsmod | grep -E '^ni'
+    echo "## services"; systemctl --no-pager status nipal nimxssvr nidevldu 2>&1 | head -60
+    echo "## journal";  journalctl -b --no-pager -u 'ni*' 2>&1 | tail -80
+    echo "## kernel log"; journalctl -k -b --no-pager 2>&1 | grep -iE 'ni(kal|pal|pxi|devnode)|natinst|3923' | tail -60
+    echo "## usb"; lsusb -d 3923: 2>&1
+  } > "$REPORT" 2>&1
+}
+
+cmd_test() {
+  command -v uv >/dev/null || { echo "uv is needed for the Python test (pacman -S uv)"; exit 1; }
+  uv run --quiet --no-project --with nidaqmx python - <<'EOF'
+import nidaqmx.system
+s = nidaqmx.system.System.local()
+v = s.driver_version
+print(f"NI-DAQmx {v.major_version}.{v.minor_version}.{v.update_version} is talking to Python.")
+devs = list(s.devices)
+if not devs:
+    print("No devices found. Plug in the hardware and run: ni-daqmx-omarchy doctor")
+for d in devs:
+    print(f"  {d.name}: {d.product_type}  (serial {d.serial_num:X})")
+    for c in d.ai_physical_chans:
+        print(f"      {c.name}")
+EOF
+}
+
+cmd_start() {
+  sudo systemctl start nipal nimxssvr nidevldu && echo "NI services started."
+}
+
+cmd_rebuild() {
+  local k=$(uname -r) m
+  for m in $(dkms status | awk -F'[/, ]+' '/^ni/{print $1"/"$2}' | sort -u); do
+    sudo dkms install --force "$m" -k "$k" || { echo "Build of $m failed; see the log path above."; exit 1; }
+  done
+  sudo systemctl restart nipal
+}
+
+cmd_update() {
+  [[ -d $REPO/.git ]] || { echo "Installer checkout not found at $REPO"; exit 1; }
+  git -C "$REPO" pull --ff-only && (cd "$REPO" && makepkg -si --noconfirm --needed)
+}
+
+cmd_mode() {
+  case ${1:-} in
+    native)
+      [[ -f $VM_RULE ]] && sudo mv "$VM_RULE" "$VM_RULE.disabled"
+      sudo udevadm control --reload
+      virsh -c qemu:///system list --name 2>/dev/null | grep -qx ni-daq \
+        && virsh -c qemu:///system shutdown ni-daq >/dev/null
+      echo "NI hardware now stays on this machine. Re-plug it, then: ni-daqmx-omarchy doctor" ;;
+    vm)
+      [[ -f $VM_RULE.disabled ]] && sudo mv "$VM_RULE.disabled" "$VM_RULE"
+      sudo udevadm control --reload
+      sudo systemctl stop nidevldu nimxssvr nipal 2>/dev/null
+      virsh -c qemu:///system start ni-daq >/dev/null 2>&1
+      echo "NI hardware is forwarded to the ni-daq VM again. Re-plug it." ;;
+    *) echo "Usage: ni-daqmx-omarchy mode native|vm"; exit 1 ;;
+  esac
+}
+
+# Called by the pacman hook after kernel upgrades (runs as root, no desktop).
+cmd_hook_check() {
+  local dir k bad=()
+  for dir in /usr/lib/modules/*/build; do
+    k=$(basename "$(dirname "$dir")")
+    kernel_has_modules "$k" || bad+=("$k")
+  done
+  ((${#bad[@]})) || return 0
+  echo "==> WARNING: NI-DAQmx kernel modules failed to build for: ${bad[*]}"
+  echo "==>          NI hardware will not work on that kernel until this is fixed."
+  echo "==>          Run 'ni-daqmx-omarchy doctor' after rebooting for details."
+  return 0
+}
+
+case ${1:-} in
+  doctor) cmd_doctor ;;
+  test) cmd_test ;;
+  start) cmd_start ;;
+  rebuild) cmd_rebuild ;;
+  update) cmd_update ;;
+  mode) shift; cmd_mode "$@" ;;
+  hook-check) cmd_hook_check ;;
+  uninstall) sudo pacman -Rns ni-daqmx ;;
+  *) usage ;;
+esac

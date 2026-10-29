@@ -1,0 +1,56 @@
+#!/bin/bash
+# Install NI-DAQmx on Omarchy / Arch Linux.
+#
+#   curl -fsSL https://raw.githubusercontent.com/klemengit/ni-daqmx-omarchy/main/install.sh | bash
+#
+# Set NI_DAQMX_OMARCHY_URL=/path/to/checkout to install from a local git repo instead of GitHub.
+
+set -eEo pipefail
+
+REPO_URL=${NI_DAQMX_OMARCHY_URL:-https://github.com/klemengit/ni-daqmx-omarchy.git}
+REPO=${NI_DAQMX_OMARCHY_REPO:-$HOME/.local/share/ni-daqmx-omarchy}
+VM_RULE=/etc/udev/rules.d/90-ni-daq-vm.rules
+
+step() { printf '\n\e[1;34m==>\e[0m \e[1m%s\e[0m\n' "$*"; }
+die()  { printf '\e[31mError:\e[0m %s\n' "$*" >&2; exit 1; }
+trap 'die "install failed at line $LINENO. Run: ni-daqmx-omarchy doctor (if installed) or re-run this script."' ERR
+
+[[ $EUID -ne 0 ]] || die "run as your normal user, not root (sudo is used where needed)"
+command -v pacman >/dev/null || die "this installer is for Omarchy / Arch Linux"
+[[ $(uname -m) == x86_64 ]] || die "NI-DAQmx only exists for x86_64"
+
+step "Installing build tools and kernel headers"
+# DKMS needs the headers for every installed kernel, not just the running one.
+headers=()
+for vmlinuz in /usr/lib/modules/*/vmlinuz; do
+  kpkg=$(pacman -Qqo "$vmlinuz" 2>/dev/null) || continue
+  headers+=("$kpkg-headers")
+done
+sudo pacman -S --needed --noconfirm base-devel git dkms "${headers[@]}"
+
+step "Fetching the installer into $REPO"
+if [[ -d $REPO/.git ]]; then
+  git -C "$REPO" pull --ff-only
+else
+  git clone --depth 1 "$REPO_URL" "$REPO"
+fi
+
+if command -v snapper >/dev/null; then
+  step "Taking a snapper snapshot (rollback point, selectable from the boot menu)"
+  sudo snapper -c root create -c number -d "before ni-daqmx-omarchy" || true
+fi
+
+step "Building and installing NI-DAQmx (downloads ~280 MB from ni.com, compiles 48 kernel modules)"
+cd "$REPO"
+makepkg -si --noconfirm --needed
+
+if [[ -f $VM_RULE ]]; then
+  step "The ni-daq VM is set up to take NI USB devices"
+  echo "Leaving that as is. To use the hardware natively: ni-daqmx-omarchy mode native"
+fi
+
+step "Starting NI services"
+sudo systemctl start nipal nimxssvr nidevldu || true
+
+step "Checking the installation"
+ni-daqmx-omarchy doctor || true

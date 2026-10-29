@@ -1,0 +1,33 @@
+--- a/nikal.c
++++ b/nikal.c
+@@ -3642,9 +3642,20 @@
+ }
+ 
+ 
++static char *nikal_strncpy(char *dest, const char *src, size_t count)
++{
++   /* strncpy semantics (zero-pad to count); kernel 7.x no longer exports strncpy */
++   size_t i = 0;
++   for (; i < count && src[i]; ++i)
++      dest[i] = src[i];
++   for (; i < count; ++i)
++      dest[i] = '\0';
++   return dest;
++}
++
+ char *nNIKAL250_strnCpy(char *dest, const char *src, size_t count)
+ {
+-   return __builtin_strncpy(dest, src, count);
++   return nikal_strncpy(dest, src, count);
+ }
+ 
+ static nNIKAL100_tUPtr nNIKAL230_kernelVirtualToPhysical(const void *ptr)
+@@ -4891,7 +4902,7 @@
+    device->deviceInfo.osDevice = (void *) dev;
+    device->deviceInfo.busType = nNIKAL1500_kBusTypeACPI;
+    device->deviceInfo.version = 1;
+-   __builtin_strncpy(device->deviceInfo.acpi.deviceID.id, acpiDevice->pnp.bus_id, sizeof(device->deviceInfo.acpi.deviceID.id));
++   nikal_strncpy(device->deviceInfo.acpi.deviceID.id, acpiDevice->pnp.bus_id, sizeof(device->deviceInfo.acpi.deviceID.id));
+ 
+    snprintf(device->nameString,
+             min(sizeof(device->nameString), sizeof(acpiDevice->pnp.bus_id)+sizeof(bus_prefix)),

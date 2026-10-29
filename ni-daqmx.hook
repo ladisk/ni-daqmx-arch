@@ -1,0 +1,13 @@
+# Runs after DKMS (70-dkms-install.hook) has rebuilt modules for a new kernel,
+# and warns on the desktop if the NI modules did not build.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/lib/modules/*/vmlinuz
+Target = usr/src/nikal-*/dkms.conf
+
+[Action]
+Description = Checking NI-DAQmx kernel modules...
+When = PostTransaction
+Exec = /usr/bin/ni-daqmx-omarchy hook-check
