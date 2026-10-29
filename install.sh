@@ -1,13 +1,13 @@
 #!/bin/bash
 # Install NI-DAQmx on Arch Linux, with any kernel.
 #
-#   curl -fsSL https://raw.githubusercontent.com/klemengit/ni-daqmx-arch/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/ladisk/ni-daqmx-arch/main/install.sh | bash
 #
 # Set NI_DAQMX_ARCH_URL=/path/to/checkout to install from a local git repo instead of GitHub.
 
 set -eEo pipefail
 
-REPO_URL=${NI_DAQMX_ARCH_URL:-https://github.com/klemengit/ni-daqmx-arch.git}
+REPO_URL=${NI_DAQMX_ARCH_URL:-https://github.com/ladisk/ni-daqmx-arch.git}
 REPO=${NI_DAQMX_ARCH_REPO:-$HOME/.local/share/ni-daqmx-arch}
 VM_RULE=/etc/udev/rules.d/90-ni-daq-vm.rules
 

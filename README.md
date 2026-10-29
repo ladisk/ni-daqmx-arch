@@ -25,10 +25,9 @@ pinned by SHA-256            repackage       ni-daqmx-arch   (helper command + h
                                              nidaqmx (Python), C API, NI hardware
 ```
 
-Verified on Omarchy with NI-DAQmx 26.5.0 (2026 Q3): all 48 modules build for
-kernels 7.2.8 and 7.2.11, NI's core modules load on 7.2.8, NI's services run,
-and the Python `nidaqmx` package talks to the driver. Acquisition with real hardware has not been tested
-yet.
+Verified on Omarchy with NI-DAQmx 26.5.0 (2026 Q3) on kernels 7.2.8 and 7.2.11:
+all 48 modules build, and a USB cDAQ-9174 with an NI 9234 acquires through the
+Python `nidaqmx` package, both finite and continuous at 25.6 kHz.
 
 ## Why this works
 
@@ -42,7 +41,7 @@ longer exports `strncpy`.
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/klemengit/ni-daqmx-arch/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ladisk/ni-daqmx-arch/main/install.sh | bash
 ```
 
 It asks for your sudo password once, then runs unattended for about ten

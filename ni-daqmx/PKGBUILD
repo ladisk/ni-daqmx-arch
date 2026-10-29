@@ -6,7 +6,7 @@ pkgname=ni-daqmx
 pkgrel=8
 pkgdesc="National Instruments NI-DAQmx driver (repackaged from NI's Ubuntu 24.04 release)"
 arch=(x86_64)
-url="https://github.com/klemengit/ni-daqmx-arch"
+url="https://github.com/ladisk/ni-daqmx-arch"
 license=(LicenseRef-NI)
 depends=(
   ni-daqmx-arch dkms bash ca-certificates dmidecode expat avahi glibc gcc-libs libusb zip
