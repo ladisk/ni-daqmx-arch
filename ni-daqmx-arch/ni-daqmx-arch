@@ -150,7 +150,9 @@ cmd_update() {
   git -C "$REPO" pull --ff-only || exit 1
 
   local out=$REPO/build pkgs=() driver_changed=0 name want have
-  mkdir -p "$out"
+  # NI's ~280 MB of .debs live outside the checkout, so they survive a re-clone.
+  export SRCDEST=${SRCDEST:-${XDG_CACHE_HOME:-$HOME/.cache}/ni-daqmx-arch/src}
+  mkdir -p "$out" "$SRCDEST"
   for name in ni-daqmx-arch ni-daqmx; do
     want=$(pkgbuild_version "$REPO/$name")
     have=$(pacman -Q "$name" 2>/dev/null | awk '{print $2}')
