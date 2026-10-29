@@ -10,7 +10,7 @@ pkgdesc="Check, test, rebuild and update NI-DAQmx on Omarchy"
 arch=(any)
 options=(!debug)
 url="https://github.com/klemengit/ni-daqmx-omarchy"
-license=(unknown)
+license=(MIT)
 depends=(bash dkms usbutils)
 optdepends=('uv: ni-daqmx-omarchy test' 'libvirt: switching hardware to the ni-daq VM')
 source=(ni-daqmx-omarchy ni-daqmx.hook)
@@ -19,4 +19,5 @@ sha256sums=(SKIP SKIP)
 package() {
   install -Dm755 ni-daqmx-omarchy "$pkgdir/usr/bin/ni-daqmx-omarchy"
   install -Dm644 ni-daqmx.hook "$pkgdir/usr/share/libalpm/hooks/95-ni-daqmx.hook"
+  install -Dm644 "$startdir/../LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
