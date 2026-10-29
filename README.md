@@ -1,5 +1,10 @@
 # ni-daqmx-arch
 
+> **Unofficial and AI-assisted.** Not affiliated with National Instruments.
+> Most of this repository was written with an AI coding assistant; see
+> [AI disclosure](#ai-disclosure). It installs proprietary kernel modules as
+> root, so read the scripts before running them.
+
 Install National Instruments NI-DAQmx natively on Arch Linux and Arch-based
 distributions (Omarchy, EndeavourOS, Manjaro, ...), on whatever kernel you run.
 
