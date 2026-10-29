@@ -1,7 +1,7 @@
 # pacman install script: replaces the parts of NI's Debian maintainer scripts that
-# matter on Arch. The originals are kept in /usr/share/ni-daqmx-omarchy/debian/.
+# matter on Arch. The originals are kept in /usr/share/ni-daqmx-arch/debian/.
 
-_share=/usr/share/ni-daqmx-omarchy
+_share=/usr/share/ni-daqmx-arch
 _units=(nipal nidevldu nimxssvr nisvcloc nisds niroco nipxicmsd ni-pxipf-nipxirm-bind nidrum)
 
 # Rebuild NI's object-broker class map from the .ocm files NI's postinst scripts register.
@@ -23,7 +23,7 @@ post_install() {
   systemctl daemon-reload
   systemctl enable "${_units[@]/%/.service}" >/dev/null 2>&1
   echo ":: NI-DAQmx installed. Kernel modules are built by DKMS for every installed kernel."
-  echo ":: Reboot, or run 'ni-daqmx-omarchy start', then 'ni-daqmx-omarchy doctor'."
+  echo ":: Reboot, or run 'ni-daqmx-arch start', then 'ni-daqmx-arch doctor'."
 }
 
 post_upgrade() {

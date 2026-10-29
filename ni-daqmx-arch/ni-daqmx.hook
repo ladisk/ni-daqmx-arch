@@ -11,4 +11,4 @@ Target = usr/src/ni*/dkms.conf
 [Action]
 Description = Checking NI-DAQmx kernel modules...
 When = PostTransaction
-Exec = /usr/bin/ni-daqmx-omarchy hook-check
+Exec = /usr/bin/ni-daqmx-arch hook-check

@@ -1,23 +1,23 @@
 # Helper command and pacman hook for the ni-daqmx package. Kept separate so that
 # changing them does not reinstall the driver and rebuild 48 kernel modules.
 
-pkgname=ni-daqmx-omarchy
+pkgname=ni-daqmx-arch
 # One version per commit that touches this directory. Computed here rather than in
 # pkgver(), because makepkg writes pkgver() results back into the tracked PKGBUILD.
 pkgver=r$(git -C "$startdir" rev-list --count HEAD -- . 2>/dev/null || echo 0)
 pkgrel=1
-pkgdesc="Check, test, rebuild and update NI-DAQmx on Omarchy"
+pkgdesc="Check, test, rebuild and update NI-DAQmx on Arch Linux"
 arch=(any)
 options=(!debug)
-url="https://github.com/klemengit/ni-daqmx-omarchy"
+url="https://github.com/klemengit/ni-daqmx-arch"
 license=(MIT)
 depends=(bash dkms usbutils)
-optdepends=('uv: ni-daqmx-omarchy test' 'libvirt: switching hardware to the ni-daq VM')
-source=(ni-daqmx-omarchy ni-daqmx.hook)
+optdepends=('uv: ni-daqmx-arch test' 'libvirt: switching hardware to the ni-daq VM')
+source=(ni-daqmx-arch ni-daqmx.hook)
 sha256sums=(SKIP SKIP)
 
 package() {
-  install -Dm755 ni-daqmx-omarchy "$pkgdir/usr/bin/ni-daqmx-omarchy"
+  install -Dm755 ni-daqmx-arch "$pkgdir/usr/bin/ni-daqmx-arch"
   install -Dm644 ni-daqmx.hook "$pkgdir/usr/share/libalpm/hooks/95-ni-daqmx.hook"
   install -Dm644 "$startdir/../LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
