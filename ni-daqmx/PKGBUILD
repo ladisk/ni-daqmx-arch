@@ -339,7 +339,9 @@ package() {
   # Passwordless root for NI's "webserv" user (an NI Linux RT account); not wanted here.
   rm -rf "$pkgdir/etc/sudoers.d"
 
-  # Kernel-compatibility patches for the open-source NI-KAL shim.
+  # Kernel-compatibility patches for the open-source NI-KAL shim. DKMS builds them
+  # for every installed kernel, so a patch must be valid on all of them: guard
+  # API changes with #if LINUX_VERSION_CODE >= KERNEL_VERSION(...), as nikal.c does.
   local nikal=("$pkgdir"/usr/src/nikal-*)
   patch -d "$nikal" -p1 < "$srcdir/nikal-0001-no-strncpy.patch"
 
