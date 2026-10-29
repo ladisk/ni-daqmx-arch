@@ -159,7 +159,10 @@ cmd_update() {
       continue
     fi
     echo "==> Building $name $want (installed: ${have:-none})"
-    (cd "$REPO/$name" && PKGDEST=$out makepkg -f --nodeps) || exit 1
+    # Keep only the newest build: the driver package is ~400 MB. -c removes the
+    # unpacked src/ and pkg/ trees (~1 GB) once the package is written.
+    rm -f "$out/$name"-[0-9r]*.pkg.tar.zst
+    (cd "$REPO/$name" && PKGDEST=$out makepkg -f -c --nodeps) || exit 1
     pkgs+=($(cd "$REPO/$name" && PKGDEST=$out makepkg --packagelist))
     [[ $name == ni-daqmx ]] && driver_changed=1
   done
