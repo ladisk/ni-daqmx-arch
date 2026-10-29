@@ -135,6 +135,14 @@ list and checksums in `ni-daqmx/PKGBUILD`. Bump `pkgrel`, commit, and run
 Not affiliated with or endorsed by National Instruments. NI-DAQmx is NI's
 software under NI's license; this repository contains none of it.
 
+## AI disclosure
+
+Most of the code and documentation in this repository was written with an AI
+coding assistant, under the author's direction. The author ran and
+checked each step on their own machine, but has not reviewed every line. The
+installer loads proprietary kernel modules as root, so read the scripts before
+you run them, and use it at your own risk.
+
 ## License
 
 MIT for the files in this repository; see [LICENSE](LICENSE) for the parts it
