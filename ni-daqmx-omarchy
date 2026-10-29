@@ -23,7 +23,7 @@ Usage: ni-daqmx-omarchy <command>
   start         Load the kernel modules and start NI's services now
   rebuild       Force-rebuild the NI kernel modules for the running kernel
   build-modules Build any NI kernel modules still missing, for every kernel
-  update        Pull the latest installer and rebuild/reinstall the package
+  update        Pull the latest installer, rebuild/reinstall, restart services, run doctor
   mode native   Use NI hardware on this machine (stop forwarding it to the ni-daq VM)
   mode vm       Forward NI hardware to the ni-daq VM again
   uninstall     Remove the package and everything it set up
@@ -128,9 +128,21 @@ cmd_rebuild() {
   systemctl restart nipal
 }
 
+# Ask for the sudo password once, then keep sudo's cached login fresh until this
+# script exits: the DKMS module builds take longer than sudo's 5-minute timeout.
+sudo_keepalive() {
+  sudo -v || exit 1
+  while sleep 60; do sudo -n true 2>/dev/null || exit; kill -0 $$ 2>/dev/null || exit; done &
+  trap "kill $! 2>/dev/null" EXIT
+}
+
 cmd_update() {
   [[ -d $REPO/.git ]] || { echo "Installer checkout not found at $REPO"; exit 1; }
-  git -C "$REPO" pull --ff-only && (cd "$REPO" && makepkg -si --noconfirm --needed)
+  sudo_keepalive
+  git -C "$REPO" pull --ff-only && (cd "$REPO" && makepkg -si --noconfirm --needed) || exit 1
+  sudo systemctl restart nipal && sudo systemctl start nimxssvr nidevldu
+  echo
+  cmd_doctor
 }
 
 cmd_mode() {

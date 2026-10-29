@@ -19,6 +19,17 @@ trap 'die "install failed at line $LINENO. Run: ni-daqmx-omarchy doctor (if inst
 command -v pacman >/dev/null || die "this installer is for Omarchy / Arch Linux"
 [[ $(uname -m) == x86_64 ]] || die "NI-DAQmx only exists for x86_64"
 
+# Ask for the sudo password once, then keep sudo's cached login fresh until this
+# script exits: the DKMS module builds take longer than sudo's 5-minute timeout.
+sudo_keepalive() {
+  sudo -v || exit 1
+  while sleep 60; do sudo -n true 2>/dev/null || exit; kill -0 $$ 2>/dev/null || exit; done &
+  trap "kill $! 2>/dev/null" EXIT
+}
+
+step "Asking for your sudo password once (the rest runs unattended, ~10 minutes)"
+sudo_keepalive
+
 step "Installing build tools and kernel headers"
 # DKMS needs the headers for every installed kernel, not just the running one.
 headers=()
