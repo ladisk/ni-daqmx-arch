@@ -51,7 +51,7 @@ cmd_doctor() {
   local failed_builds=$(dkms status -k "$k" 2>/dev/null | grep -E '^ni' | grep -vc installed)
   [[ $failed_builds == 0 ]] && ok "all $(dkms status -k "$k" | grep -c '^ni') NI DKMS modules installed" \
     || bad "$failed_builds NI DKMS modules not installed"
-  if lsmod | grep -q '^nipalk'; then ok "nipalk loaded"
+  if [[ $(cat /sys/module/nipalk/initstate 2>/dev/null) == live ]]; then ok "nipalk loaded"
   else bad "nipalk not loaded"; hint "ni-daqmx-omarchy start, then check: journalctl -b -u nipal"; fi
   [[ -c /dev/nipalk ]] && ok "/dev/nipalk present" || bad "/dev/nipalk missing"
 
@@ -152,8 +152,10 @@ cmd_mode() {
 }
 
 # Build every NI DKMS module that is not installed yet for kernel $1, in dependency
-# order. Arch's DKMS hook checks only the first BUILD_DEPENDS entry, so modules
-# depending on nipalk/niorbk get tried too early and are left unbuilt. Runs as root.
+# order. The PKGBUILD chains BUILD_DEPENDS so Arch's DKMS hook builds them in order;
+# this catches whatever that hook still left unbuilt, using NI's real dependency
+# lists (NI_BUILD_DEPENDS), so one failed module does not block unrelated ones.
+# --force: dkms would otherwise refuse while a chained predecessor is missing. Runs as root.
 build_modules() {
   local k=$1 conf progress=1 built=0 force=${2:-}
   local -A installed=()
@@ -168,13 +170,13 @@ build_modules() {
     for conf in /usr/src/ni*-*/dkms.conf; do
       local name ver deps dep ready=1
       # dkms.conf refers to DKMS's own variables, so read it with -u off.
-      read -r name ver deps < <(set +u; source "$conf"; echo "$PACKAGE_NAME $PACKAGE_VERSION ${BUILD_DEPENDS[*]}")
+      read -r name ver deps < <(set +u; source "$conf"; echo "$PACKAGE_NAME $PACKAGE_VERSION ${NI_BUILD_DEPENDS[*]:-${BUILD_DEPENDS[*]}}")
       [[ -n $name && -n $ver ]] || { echo "==> cannot parse $conf"; continue; }
       [[ -n ${installed[$name]:-} ]] && continue
       for dep in $deps; do [[ -n ${installed[$dep]:-} ]] || ready=0; done
       (( ready )) || continue
       echo "==> building $name/$ver for $k"
-      if [[ -n ${NI_DRY_RUN:-} ]] || dkms install --no-depmod ${force:+--force} "$name/$ver" -k "$k" >/dev/null; then
+      if [[ -n ${NI_DRY_RUN:-} ]] || dkms install --no-depmod --force "$name/$ver" -k "$k" >/dev/null; then
         installed[$name]=1; progress=1; built=1
       else
         echo "==> FAILED: $name/$ver for $k (log: /var/lib/dkms/$name/$ver/build/make.log)"
