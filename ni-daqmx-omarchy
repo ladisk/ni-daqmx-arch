@@ -167,14 +167,14 @@ build_modules() {
     progress=0
     for conf in /usr/src/ni*-*/dkms.conf; do
       local name ver deps dep ready=1
-      name=$(source "$conf"; echo "$PACKAGE_NAME")
-      ver=$(source "$conf"; echo "$PACKAGE_VERSION")
-      deps=$(source "$conf"; echo "${BUILD_DEPENDS[@]}")
+      # dkms.conf refers to DKMS's own variables, so read it with -u off.
+      read -r name ver deps < <(set +u; source "$conf"; echo "$PACKAGE_NAME $PACKAGE_VERSION ${BUILD_DEPENDS[*]}")
+      [[ -n $name && -n $ver ]] || { echo "==> cannot parse $conf"; continue; }
       [[ -n ${installed[$name]:-} ]] && continue
       for dep in $deps; do [[ -n ${installed[$dep]:-} ]] || ready=0; done
       (( ready )) || continue
       echo "==> building $name/$ver for $k"
-      if dkms install --no-depmod ${force:+--force} "$name/$ver" -k "$k" >/dev/null; then
+      if [[ -n ${NI_DRY_RUN:-} ]] || dkms install --no-depmod ${force:+--force} "$name/$ver" -k "$k" >/dev/null; then
         installed[$name]=1; progress=1; built=1
       else
         echo "==> FAILED: $name/$ver for $k (log: /var/lib/dkms/$name/$ver/build/make.log)"
@@ -182,7 +182,7 @@ build_modules() {
       fi
     done
   done
-  (( built )) && depmod "$k"
+  (( built )) && [[ -z ${NI_DRY_RUN:-} ]] && depmod "$k"
   return 0
 }
 
@@ -196,6 +196,7 @@ cmd_build_modules() {
 
 # Called by the pacman hook after DKMS has run (as root, no desktop).
 cmd_hook_check() {
+  echo "==> (The 'missing BUILD_DEPENDS' errors from DKMS above are expected; building those modules now.)"
   cmd_build_modules
   local dir k bad=()
   for dir in /usr/lib/modules/*/build; do
