@@ -8,6 +8,7 @@ pkgver=r$(git -C "$startdir" rev-list --count HEAD -- . 2>/dev/null || echo 0)
 pkgrel=1
 pkgdesc="Check, test, rebuild and update NI-DAQmx on Omarchy"
 arch=(any)
+options=(!debug)
 url="https://github.com/klemengit/ni-daqmx-omarchy"
 license=(unknown)
 depends=(bash dkms usbutils)

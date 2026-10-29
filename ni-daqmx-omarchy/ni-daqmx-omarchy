@@ -262,6 +262,6 @@ case ${1:-} in
   mode) shift; cmd_mode "$@" ;;
   build-modules) cmd_build_modules ;;
   hook-check) cmd_hook_check ;;
-  uninstall) sudo pacman -Rns ni-daqmx ;;
+  uninstall) sudo pacman -Rns ni-daqmx ni-daqmx-omarchy ;;
   *) usage ;;
 esac
