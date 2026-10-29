@@ -1,11 +1,12 @@
-# Runs after DKMS (70-dkms-install.hook) has rebuilt modules for a new kernel,
-# and warns on the desktop if the NI modules did not build.
+# Runs after DKMS (70-dkms-install.hook): builds the NI modules that hook skipped
+# (it mis-orders modules with several BUILD_DEPENDS) and warns if any failed.
 [Trigger]
 Operation = Install
 Operation = Upgrade
 Type = Path
 Target = usr/lib/modules/*/vmlinuz
-Target = usr/src/nikal-*/dkms.conf
+Target = usr/lib/modules/*/build/include/
+Target = usr/src/ni*/dkms.conf
 
 [Action]
 Description = Checking NI-DAQmx kernel modules...

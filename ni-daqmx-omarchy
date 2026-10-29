@@ -21,7 +21,8 @@ Usage: ni-daqmx-omarchy <command>
                 a full report to $REPORT
   test          List NI devices through the Python nidaqmx API
   start         Load the kernel modules and start NI's services now
-  rebuild       Rebuild the NI kernel modules for the running kernel, verbosely
+  rebuild       Force-rebuild the NI kernel modules for the running kernel
+  build-modules Build any NI kernel modules still missing, for every kernel
   update        Pull the latest installer and rebuild/reinstall the package
   mode native   Use NI hardware on this machine (stop forwarding it to the ni-daq VM)
   mode vm       Forward NI hardware to the ni-daq VM again
@@ -122,11 +123,9 @@ cmd_start() {
 }
 
 cmd_rebuild() {
-  local k=$(uname -r) m
-  for m in $(dkms status | awk -F'[/, ]+' '/^ni/{print $1"/"$2}' | sort -u); do
-    sudo dkms install --force "$m" -k "$k" || { echo "Build of $m failed; see the log path above."; exit 1; }
-  done
-  sudo systemctl restart nipal
+  [[ $EUID -eq 0 ]] || exec sudo "$0" rebuild "$@"
+  build_modules "$(uname -r)" force
+  systemctl restart nipal
 }
 
 cmd_update() {
@@ -152,8 +151,52 @@ cmd_mode() {
   esac
 }
 
-# Called by the pacman hook after kernel upgrades (runs as root, no desktop).
+# Build every NI DKMS module that is not installed yet for kernel $1, in dependency
+# order. Arch's DKMS hook checks only the first BUILD_DEPENDS entry, so modules
+# depending on nipalk/niorbk get tried too early and are left unbuilt. Runs as root.
+build_modules() {
+  local k=$1 conf progress=1 built=0 force=${2:-}
+  local -A installed=()
+  local line
+  while read -r line; do
+    [[ $line =~ ^([^/]+)/[^,]+,\ $k,.*:\ installed ]] && installed[${BASH_REMATCH[1]}]=1
+  done < <(dkms status -k "$k" 2>/dev/null)
+  [[ -n $force ]] && installed=()
+
+  while (( progress )); do
+    progress=0
+    for conf in /usr/src/ni*-*/dkms.conf; do
+      local name ver deps dep ready=1
+      name=$(source "$conf"; echo "$PACKAGE_NAME")
+      ver=$(source "$conf"; echo "$PACKAGE_VERSION")
+      deps=$(source "$conf"; echo "${BUILD_DEPENDS[@]}")
+      [[ -n ${installed[$name]:-} ]] && continue
+      for dep in $deps; do [[ -n ${installed[$dep]:-} ]] || ready=0; done
+      (( ready )) || continue
+      echo "==> building $name/$ver for $k"
+      if dkms install --no-depmod ${force:+--force} "$name/$ver" -k "$k" >/dev/null; then
+        installed[$name]=1; progress=1; built=1
+      else
+        echo "==> FAILED: $name/$ver for $k (log: /var/lib/dkms/$name/$ver/build/make.log)"
+        installed[$name]=failed
+      fi
+    done
+  done
+  (( built )) && depmod "$k"
+  return 0
+}
+
+cmd_build_modules() {
+  [[ $EUID -eq 0 ]] || exec sudo "$0" build-modules
+  local dir
+  for dir in /usr/lib/modules/*/build; do
+    build_modules "$(basename "$(dirname "$dir")")"
+  done
+}
+
+# Called by the pacman hook after DKMS has run (as root, no desktop).
 cmd_hook_check() {
+  cmd_build_modules
   local dir k bad=()
   for dir in /usr/lib/modules/*/build; do
     k=$(basename "$(dirname "$dir")")
@@ -173,6 +216,7 @@ case ${1:-} in
   rebuild) cmd_rebuild ;;
   update) cmd_update ;;
   mode) shift; cmd_mode "$@" ;;
+  build-modules) cmd_build_modules ;;
   hook-check) cmd_hook_check ;;
   uninstall) sudo pacman -Rns ni-daqmx ;;
   *) usage ;;
