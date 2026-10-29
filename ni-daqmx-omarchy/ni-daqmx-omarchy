@@ -136,11 +136,40 @@ sudo_keepalive() {
   trap "kill $! 2>/dev/null" EXIT
 }
 
+# "pkgver-pkgrel" a PKGBUILD directory would build.
+pkgbuild_version() {
+  (cd "$1" && makepkg --printsrcinfo) | awk '$1=="pkgver"{v=$3} $1=="pkgrel"{r=$3} END{print v"-"r}'
+}
+
+# Build the packages whose version differs from the installed one (the helper
+# takes seconds, the driver ~1 minute plus a full DKMS rebuild on install), then
+# install them in one pacman transaction so files can move between them.
 cmd_update() {
   [[ -d $REPO/.git ]] || { echo "Installer checkout not found at $REPO"; exit 1; }
   sudo_keepalive
-  git -C "$REPO" pull --ff-only && (cd "$REPO" && makepkg -si --noconfirm --needed) || exit 1
-  sudo systemctl restart nipal && sudo systemctl start nimxssvr nidevldu
+  git -C "$REPO" pull --ff-only || exit 1
+
+  local out=$REPO/build pkgs=() driver_changed=0 name want have
+  mkdir -p "$out"
+  for name in ni-daqmx-omarchy ni-daqmx; do
+    want=$(pkgbuild_version "$REPO/$name")
+    have=$(pacman -Q "$name" 2>/dev/null | awk '{print $2}')
+    if [[ $want == "$have" ]]; then
+      echo "==> $name $have is up to date"
+      continue
+    fi
+    echo "==> Building $name $want (installed: ${have:-none})"
+    (cd "$REPO/$name" && PKGDEST=$out makepkg -f --nodeps) || exit 1
+    pkgs+=($(cd "$REPO/$name" && PKGDEST=$out makepkg --packagelist))
+    [[ $name == ni-daqmx ]] && driver_changed=1
+  done
+
+  if ((${#pkgs[@]})); then
+    sudo pacman -U --noconfirm "${pkgs[@]}" || exit 1
+  fi
+  if (( driver_changed )); then
+    sudo systemctl restart nipal && sudo systemctl start nimxssvr nidevldu
+  fi
   echo
   cmd_doctor
 }
@@ -210,7 +239,7 @@ cmd_build_modules() {
 
 # Called by the pacman hook after DKMS has run (as root, no desktop).
 cmd_hook_check() {
-  echo "==> (The 'missing BUILD_DEPENDS' errors from DKMS above are expected; building those modules now.)"
+  compgen -G '/usr/src/nikal-*/dkms.conf' >/dev/null || return 0   # driver not installed
   cmd_build_modules
   local dir k bad=()
   for dir in /usr/lib/modules/*/build; do

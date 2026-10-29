@@ -18,7 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KEY = ROOT / "keys" / "ni-software-2026.asc"
-PKGBUILD = ROOT / "PKGBUILD"
+PKGBUILD = ROOT / "ni-daqmx" / "PKGBUILD"
 DISTRO = "noble"
 TOP_PACKAGE = "ni-daqmx"
 

@@ -43,7 +43,7 @@ step "Fetching the installer into $REPO"
 if [[ -d $REPO/.git ]]; then
   git -C "$REPO" pull --ff-only
 else
-  git clone --depth 1 "$REPO_URL" "$REPO"
+  git clone "$REPO_URL" "$REPO"
 fi
 
 if command -v snapper >/dev/null; then
@@ -52,16 +52,9 @@ if command -v snapper >/dev/null; then
 fi
 
 step "Building and installing NI-DAQmx (downloads ~280 MB from ni.com, compiles 48 kernel modules)"
-cd "$REPO"
-makepkg -si --noconfirm --needed
+"$REPO/ni-daqmx-omarchy/ni-daqmx-omarchy" update || true   # update ends with doctor, which explains any failure
 
 if [[ -f $VM_RULE ]]; then
   step "The ni-daq VM is set up to take NI USB devices"
   echo "Leaving that as is. To use the hardware natively: ni-daqmx-omarchy mode native"
 fi
-
-step "Starting NI services"
-sudo systemctl start nipal nimxssvr nidevldu || true
-
-step "Checking the installation"
-ni-daqmx-omarchy doctor || true
