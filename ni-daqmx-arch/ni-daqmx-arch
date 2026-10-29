@@ -7,6 +7,8 @@ REPO=${NI_DAQMX_ARCH_REPO:-$HOME/.local/share/ni-daqmx-arch}
 VM_RULE=/etc/udev/rules.d/90-ni-daq-vm.rules
 REPORT=${NI_DAQMX_REPORT:-$HOME/ni-daqmx-report.txt}
 CORE_MODULES=(nikal nipalk)
+# NI's services, as enabled by ni-daqmx.install. nidrum drives USB devices from user space.
+UNITS=(nipal nidevldu nimxssvr nisvcloc nisds niroco nipxicmsd ni-pxipf-nipxirm-bind nidrum)
 
 ok()   { printf '  \e[32m✓\e[0m %s\n' "$*"; }
 bad()  { printf '  \e[31m✗\e[0m %s\n' "$*"; FAILED=1; }
@@ -57,7 +59,7 @@ cmd_doctor() {
 
   echo "Services"
   local u
-  for u in nipal nimxssvr nidevldu; do
+  for u in "${UNITS[@]}"; do
     systemctl is-active -q $u && ok "$u running" || { bad "$u not running"; hint "journalctl -b -u $u"; }
   done
 
@@ -94,7 +96,7 @@ write_report() {
       [[ -f $log ]] && grep -qiE 'error|undefined' "$log" && { echo "### $log"; tail -60 "$log"; }
     done
     echo "## lsmod";   lsmod | grep -E '^ni'
-    echo "## services"; systemctl --no-pager status nipal nimxssvr nidevldu 2>&1 | head -60
+    echo "## services"; systemctl --no-pager status "${UNITS[@]}" 2>&1 | head -150
     echo "## journal";  journalctl -b --no-pager -u 'ni*' 2>&1 | tail -80
     echo "## kernel log"; journalctl -k -b --no-pager 2>&1 | grep -iE 'ni(kal|pal|pxi|devnode)|natinst|3923' | tail -60
     echo "## usb"; lsusb -d 3923: 2>&1
@@ -119,13 +121,13 @@ EOF
 }
 
 cmd_start() {
-  sudo systemctl start nipal nimxssvr nidevldu && echo "NI services started."
+  sudo systemctl start "${UNITS[@]}" && echo "NI services started."
 }
 
 cmd_rebuild() {
   [[ $EUID -eq 0 ]] || exec sudo "$0" rebuild "$@"
   build_modules "$(uname -r)" force
-  systemctl restart nipal
+  systemctl restart "${UNITS[@]}"
 }
 
 # Ask for the sudo password once, then keep sudo's cached login fresh until this
@@ -175,7 +177,7 @@ cmd_update() {
     sudo pacman -U --noconfirm "${pkgs[@]}" || exit 1
   fi
   if (( driver_changed )); then
-    sudo systemctl restart nipal && sudo systemctl start nimxssvr nidevldu
+    sudo systemctl restart "${UNITS[@]}"
   fi
   echo
   cmd_doctor
@@ -192,7 +194,7 @@ cmd_mode() {
     vm)
       [[ -f $VM_RULE.disabled ]] && sudo mv "$VM_RULE.disabled" "$VM_RULE"
       sudo udevadm control --reload
-      sudo systemctl stop nidevldu nimxssvr nipal 2>/dev/null
+      sudo systemctl stop "${UNITS[@]}" 2>/dev/null
       virsh -c qemu:///system start ni-daq >/dev/null 2>&1
       echo "NI hardware is forwarded to the ni-daq VM again. Re-plug it." ;;
     *) echo "Usage: ni-daqmx-arch mode native|vm"; exit 1 ;;
