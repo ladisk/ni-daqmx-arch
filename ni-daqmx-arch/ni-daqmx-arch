@@ -151,7 +151,7 @@ cmd_update() {
   sudo_keepalive
   git -C "$REPO" pull --ff-only || exit 1
 
-  local out=$REPO/build pkgs=() driver_changed=0 name want have
+  local out=$REPO/build pkgs=() driver_changed=0 fresh=0 name want have
   # NI's ~280 MB of .debs live outside the checkout, so they survive a re-clone.
   export SRCDEST=${SRCDEST:-${XDG_CACHE_HOME:-$HOME/.cache}/ni-daqmx-arch/src}
   # Packages are built and installed locally, never shipped: skip compressing 1.4 GB.
@@ -170,14 +170,17 @@ cmd_update() {
     rm -f "$out/$name"-[0-9r]*.pkg.tar*
     (cd "$REPO/$name" && PKGDEST=$out makepkg -f -c --nodeps) || exit 1
     pkgs+=($(cd "$REPO/$name" && PKGDEST=$out makepkg --packagelist))
-    [[ $name == ni-daqmx ]] && driver_changed=1
+    [[ $name == ni-daqmx ]] && driver_changed=1 && [[ -z $have ]] && fresh=1
   done
 
   if ((${#pkgs[@]})); then
     sudo pacman -U --noconfirm "${pkgs[@]}" || exit 1
   fi
   if (( driver_changed )); then
-    sudo systemctl restart "${UNITS[@]}"
+    # try-restart on upgrades: leaves the services off while the hardware is
+    # handed to the VM (mode vm). A first install starts them.
+    if (( fresh )); then sudo systemctl start "${UNITS[@]}"
+    else sudo systemctl try-restart "${UNITS[@]}"; fi
   fi
   echo
   cmd_doctor
@@ -190,11 +193,13 @@ cmd_mode() {
       sudo udevadm control --reload
       virsh -c qemu:///system list --name 2>/dev/null | grep -qx ni-daq \
         && virsh -c qemu:///system shutdown ni-daq >/dev/null
+      sudo systemctl enable --now "${UNITS[@]}" >/dev/null 2>&1
       echo "NI hardware now stays on this machine. Re-plug it, then: ni-daqmx-arch doctor" ;;
     vm)
       [[ -f $VM_RULE.disabled ]] && sudo mv "$VM_RULE.disabled" "$VM_RULE"
       sudo udevadm control --reload
-      sudo systemctl stop "${UNITS[@]}" 2>/dev/null
+      # Disabled, not just stopped: at boot nidrum would claim the chassis before the VM.
+      sudo systemctl disable --now "${UNITS[@]}" >/dev/null 2>&1
       virsh -c qemu:///system start ni-daq >/dev/null 2>&1
       echo "NI hardware is forwarded to the ni-daq VM again. Re-plug it." ;;
     *) echo "Usage: ni-daqmx-arch mode native|vm"; exit 1 ;;
