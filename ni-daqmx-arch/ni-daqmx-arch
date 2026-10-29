@@ -152,6 +152,8 @@ cmd_update() {
   local out=$REPO/build pkgs=() driver_changed=0 name want have
   # NI's ~280 MB of .debs live outside the checkout, so they survive a re-clone.
   export SRCDEST=${SRCDEST:-${XDG_CACHE_HOME:-$HOME/.cache}/ni-daqmx-arch/src}
+  # Packages are built and installed locally, never shipped: skip compressing 1.4 GB.
+  export PKGEXT=${PKGEXT:-.pkg.tar}
   mkdir -p "$out" "$SRCDEST"
   for name in ni-daqmx-arch ni-daqmx; do
     want=$(pkgbuild_version "$REPO/$name")
@@ -163,7 +165,7 @@ cmd_update() {
     echo "==> Building $name $want (installed: ${have:-none})"
     # Keep only the newest build: the driver package is ~400 MB. -c removes the
     # unpacked src/ and pkg/ trees (~1 GB) once the package is written.
-    rm -f "$out/$name"-[0-9r]*.pkg.tar.zst
+    rm -f "$out/$name"-[0-9r]*.pkg.tar*
     (cd "$REPO/$name" && PKGDEST=$out makepkg -f -c --nodeps) || exit 1
     pkgs+=($(cd "$REPO/$name" && PKGDEST=$out makepkg --packagelist))
     [[ $name == ni-daqmx ]] && driver_changed=1
