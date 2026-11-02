@@ -15,6 +15,8 @@ echo "==> Fetching NI Linux Device Drivers ${REL}"
 mkdir -p "$D" && cd "$D"
 [ -f "NILinux${REL}DeviceDrivers.zip" ] || curl -sSL -o "NILinux${REL}DeviceDrivers.zip" "$URL"
 unzip -o -q "NILinux${REL}DeviceDrivers.zip"
+# Newer zips wrap the packages in a folder named after the archive.
+[ -d "NILinux${REL}DeviceDrivers" ] && cd "NILinux${REL}DeviceDrivers"
 
 echo "==> Registering NI's apt repository"
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "./ni-ubuntu2404-drivers-${REL}.deb"
