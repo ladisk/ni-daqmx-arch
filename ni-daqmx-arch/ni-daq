@@ -199,8 +199,12 @@ cmd_update() {
   fi
   if (( driver_changed )); then
     # try-restart on upgrades: leaves the services off while the hardware is
-    # handed to the VM (mode vm). A first install starts them.
-    if (( fresh )); then sudo systemctl start "${UNITS[@]}"
+    # handed to the VM (mode vm). A first install starts them, unless the VM has the hardware.
+    if (( fresh )) && [[ -f $VM_RULE ]]; then
+      # The ni-daq VM takes NI USB hardware on this machine: leave the services off,
+      # as `mode vm` does, so nidrum does not claim the chassis now or at boot.
+      sudo systemctl disable --now "${UNITS[@]}" >/dev/null 2>&1
+    elif (( fresh )); then sudo systemctl start "${UNITS[@]}"
     else sudo systemctl try-restart "${UNITS[@]}"; fi
   fi
   echo
